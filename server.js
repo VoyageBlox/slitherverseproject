@@ -18,7 +18,7 @@ const MAP_SIZE = 3000;
 let players = {};
 let foods = [];
 
-// Seed Initial Food
+// Seed system initial food
 for (let i = 0; i < 300; i++) {
     spawnFood();
 }
@@ -39,8 +39,6 @@ io.on('connection', (socket) => {
 
     socket.on('joinGame', (data) => {
         const colors = ['#ff3366', '#33ccff', '#33ff99', '#ff9933', '#cc33ff'];
-        
-        // Spawn Snake configurations
         let startX = Math.random() * (MAP_SIZE - 200) + 100;
         let startY = Math.random() * (MAP_SIZE - 200) + 100;
         
@@ -57,7 +55,6 @@ io.on('connection', (socket) => {
             segments: []
         };
 
-        // Initialize segments array layout positions
         for(let i=0; i<15; i++) {
             players[socket.id].segments.push({x: startX, y: startY});
         }
@@ -75,42 +72,36 @@ io.on('connection', (socket) => {
     });
 });
 
-// Primary Game Server Loop Calculations (Run at 60Hz)
+// Main computing ticking system engine
 setInterval(() => {
     Object.values(players).forEach(player => {
-        // Move Snake Head location
         player.x += Math.cos(player.angle) * player.speed;
         player.y += Math.sin(player.angle) * player.speed;
 
-        // Boundary checks constraints
         if (player.x < 0) player.x = 0;
         if (player.x > MAP_SIZE) player.x = MAP_SIZE;
         if (player.y < 0) player.y = 0;
         if (player.y > MAP_SIZE) player.y = MAP_SIZE;
 
-        // Shift Snake Body segment array nodes
         player.segments.push({ x: player.x, y: player.y });
         
-        // Dynamic Segment sizing relative to growing score scale
         let targetLength = 15 + Math.floor(player.score / 5);
         while (player.segments.length > targetLength) {
             player.segments.shift();
         }
 
-        // Food Intake Collisions Check
         for (let i = foods.length - 1; i >= 0; i--) {
             let food = foods[i];
             let dist = Math.hypot(player.x - food.x, player.y - food.y);
             if (dist < player.radius + food.radius) {
                 player.score += food.radius * 0.5;
-                player.radius = 12 + (player.score * 0.05); // Smooth scaling thickness
+                player.radius = 12 + (player.score * 0.05);
                 foods.splice(i, 1);
                 spawnFood();
             }
         }
     });
 
-    // Broadcast update states payload to clients
     io.emit('gameUpdate', { players, foods });
 }, 1000 / 60);
 
