@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slither.io Remastered</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        #canvas {
+            display: none;
+            background: radial-gradient(circle, #1a1a2e 0%, #0f0c1b 100%);
+        }
+
+        /* Menu Styling */
+        #menu-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 35, 0.85);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0, 190, 255, 0.3);
+            text-align: center;
+            color: #fff;
+            width: 320px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 190, 255, 0.2);
+            display: block;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #00ffcc, #0077ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        input[type="text"] {
+            width: 85%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1rem;
+            text-align: center;
+            outline: none;
+            transition: 0.3s;
+            border: 1px solid transparent;
+        }
+
+        input[type="text"]:focus {
+            border: 1px solid #00ffcc;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        button {
+            width: 93%;
+            padding: 12px;
+            background: linear-gradient(45deg, #0077ff, #00ffcc);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 5px 15px rgba(0, 119, 255, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 255, 204, 0.6);
+        }
+
+        #leaderboard {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            display: none;
+            pointer-events: none;
+            min-width: 150px;
+        }
+    </style>
+    <!-- Include Socket.io client library -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+    <!-- Main Menu -->
+    <div id="menu-container">
+        <h1>Slither.io</h1>
+        <input type="text" id="nickname" placeholder="Enter Nickname" maxlength="15">
+        <button id="play-btn">Play Multiplayer</button>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard">
+        <div style="font-weight: bold; color: #00ffcc; margin-bottom: 5px;">LEADERBOARD</div>
+        <div id="leaderboard-content"></div>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const menuContainer = document.getElementById('menu-container');
+        const nicknameInput = document.getElementById('nickname');
+        const playBtn = document.getElementById('play-btn');
+        const leaderboard = document.getElementById('leaderboard');
+        const leaderboardContent = document.getElementById('leaderboard-content');
+
+        let socket;
+        let players = {};
+        let foods = [];
+        let myId = null;
+        let mouseX = 0;
+        let mouseY = 0;
+        let isPlaying = false;
+
+        const MAP_SIZE = 3000;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX - canvas.width / 2;
+            mouseY = e.clientY - canvas.height / 2;
+        });
+
+        playBtn.addEventListener('click', () => {
+            const name = nicknameInput.value.trim() || "Unnamed Snake";
+            menuContainer.style.display = 'none';
+            canvas.style.display = 'block';
+            leaderboard.style.display = 'block';
+            isPlaying = true;
+
+            initSocket(name);
+        });
+
+        function initSocket(name) {
+            // Force connection to local server for testing
+            socket = io('http://localhost:3000', {
+                transports: ['websocket'],
+                upgrade: false
+            });
+
+            socket.on('connect', () => {
+                myId = socket.id;
+                socket.emit('joinGame', { name: name });
+            });
+
+            socket.on('gameUpdate', (data) => {
+                players = data.players;
+                foods = data.foods;
+                updateLeaderboard();
+            });
+
+            // Send angle updates to server
+            setInterval(() => {
+                if (socket && socket.connected) {
+                    const angle = Math.atan2(mouseY, mouseX);
+                    socket.emit('updateAngle', angle);
+                }
+            }, 1000 / 60);
+        }
+
+        function updateLeaderboard() {
+            let sorted = Object.values(players).sort((a, b) => b.score - a.score).slice(0, 5);
+            leaderboardContent.innerHTML = sorted.map((p, index) => 
+                `<div>${index + 1}. ${p.name}: ${Math.floor(p.score)}</div>`
+            ).join('');
+        }
+
+        // Render Loop
+        function draw() {
+            if (!isPlaying) {
+                requestAnimationFrame(draw);
+                return;
+            }
+
+            // Clear screen with a dark background
+            ctx.fillStyle = '#0f0c1b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Camera Tracking: Default to center if server hasn't sent our snake position yet
+            let camX = MAP_SIZE / 2;
+            let camY = MAP_SIZE / 2;
+
+            if (myId && players[myId]) {
+                camX = players[myId].x;
+                camY = players[myId].y;
+            }
+
+            const offsetX = canvas.width / 2 - camX;
+            const offsetY = canvas.height / 2 - camY;
+
+            // Draw Map Grid
+            ctx.strokeStyle = "rgba(0, 190, 255, 0.15)";
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= MAP_SIZE; x += 100) {
+                ctx.beginPath();
+                ctx.moveTo(x + offsetX, 0 + offsetY);
+                ctx.lineTo(x + offsetX, MAP_SIZE + offsetY);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= MAP_SIZE; y += 100) {
+                ctx.beginPath();
+                ctx.moveTo(0 + offsetX, y + offsetY);
+                ctx.lineTo(MAP_SIZE + offsetX, y + offsetY);
+                ctx.stroke();
+            }
+
+            // Draw Food Glowing Orbs
+            foods.forEach(food => {
+                ctx.beginPath();
+                ctx.arc(food.x + offsetX, food.y + offsetY, food.radius, 0, Math.PI * 2);
+                ctx.fillStyle = food.color;
+                ctx.fill();
+            });
+
+            // Draw All Active Players
+            Object.values(players).forEach(player => {
+                if (!player.segments || player.segments.length === 0) return;
+
+                // Draw Body Strings
+                ctx.lineWidth = player.radius * 2;
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                ctx.strokeStyle = player.color;
+
+                ctx.beginPath();
+                ctx.moveTo(player.segments[0].x + offsetX, player.segments[0].y + offsetY);
+                for (let i = 1; i < player.segments.length; i++) {
+                    ctx.lineTo(player.segments[i].x + offsetX, player.segments[i].y + offsetY);
+                }
+                ctx.stroke();
+
+                // Draw Glowing Head Circle
+                const head = player.segments[player.segments.length - 1];
+                ctx.beginPath();
+                ctx.arc(head.x + offsetX, head.y + offsetY, player.radius, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+
+                // Name Plates
+                ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.font = "bold 14px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText(player.name, head.x + offsetX, head.y + offsetY - (player.radius + 12));
+            });
+
+            requestAnimationFrame(draw);
+        }
+        
+        // Start loop immediately
+        draw();
+    </script>
+</body>
+</html>
