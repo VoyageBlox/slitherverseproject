@@ -122,6 +122,10 @@
     <canvas id="canvas"></canvas>
 
     <script>
+        // CONFIGURATION: Put your Render Live URL here!
+        // Example: "https://slither-backend.onrender.com"
+        const RENDER_URL = "https://your-app-name.onrender.com";
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const menuContainer = document.getElementById('menu-container');
@@ -163,8 +167,8 @@
         });
 
         function initSocket(name) {
-            // Force connection to local server for testing
-            socket = io('http://localhost:3000', {
+            // Connects to your live cloud deployment
+            socket = io(RENDER_URL, {
                 transports: ['websocket'],
                 upgrade: false
             });
@@ -180,7 +184,7 @@
                 updateLeaderboard();
             });
 
-            // Send angle updates to server
+            // Handle server angles at 60 frames per second
             setInterval(() => {
                 if (socket && socket.connected) {
                     const angle = Math.atan2(mouseY, mouseX);
@@ -196,18 +200,17 @@
             ).join('');
         }
 
-        // Render Loop
+        // Render Frame Canvas loop
         function draw() {
             if (!isPlaying) {
                 requestAnimationFrame(draw);
                 return;
             }
 
-            // Clear screen with a dark background
+            // Dark void space canvas reset
             ctx.fillStyle = '#0f0c1b';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Camera Tracking: Default to center if server hasn't sent our snake position yet
             let camX = MAP_SIZE / 2;
             let camY = MAP_SIZE / 2;
 
@@ -219,7 +222,7 @@
             const offsetX = canvas.width / 2 - camX;
             const offsetY = canvas.height / 2 - camY;
 
-            // Draw Map Grid
+            // Draw Background Grid
             ctx.strokeStyle = "rgba(0, 190, 255, 0.15)";
             ctx.lineWidth = 1;
             for (let x = 0; x <= MAP_SIZE; x += 100) {
@@ -235,7 +238,7 @@
                 ctx.stroke();
             }
 
-            // Draw Food Glowing Orbs
+            // Draw Food Nodes
             foods.forEach(food => {
                 ctx.beginPath();
                 ctx.arc(food.x + offsetX, food.y + offsetY, food.radius, 0, Math.PI * 2);
@@ -243,11 +246,11 @@
                 ctx.fill();
             });
 
-            // Draw All Active Players
+            // Draw Snake Elements
             Object.values(players).forEach(player => {
                 if (!player.segments || player.segments.length === 0) return;
 
-                // Draw Body Strings
+                // Segment line tracing
                 ctx.lineWidth = player.radius * 2;
                 ctx.lineCap = "round";
                 ctx.lineJoin = "round";
@@ -260,14 +263,14 @@
                 }
                 ctx.stroke();
 
-                // Draw Glowing Head Circle
+                // Snake lead skull head
                 const head = player.segments[player.segments.length - 1];
                 ctx.beginPath();
                 ctx.arc(head.x + offsetX, head.y + offsetY, player.radius, 0, Math.PI * 2);
                 ctx.fillStyle = "#ffffff";
                 ctx.fill();
 
-                // Name Plates
+                // Text UI strings
                 ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
                 ctx.font = "bold 14px Arial";
                 ctx.textAlign = "center";
@@ -277,7 +280,6 @@
             requestAnimationFrame(draw);
         }
         
-        // Start loop immediately
         draw();
     </script>
 </body>
